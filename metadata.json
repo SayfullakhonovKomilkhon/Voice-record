@@ -1,0 +1,6 @@
+{
+  "name": "Deals Recorder",
+  "description": "Приложение для записи деловых переговоров, автоматической транскрипции с разделением спикеров и составления умных сводок встреч с помощью ИИ.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
