@@ -1,0 +1,56 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isMeetingOwner(meetingId) {
+      return isAuthenticated() && 
+        (resource == null || resource.data.ownerId == request.auth.uid) &&
+        (request.resource == null || request.resource.data.ownerId == request.auth.uid);
+    }
+
+    // 1. Users collection
+    // User can read and manage their own profile and limit states
+    match /users/{userId} {
+      allow read, write: if isOwner(userId);
+
+      // User's voice profiles for naming speakers
+      match /voiceProfiles/{profileId} {
+        allow read, write: if isOwner(userId);
+      }
+    }
+
+    // 2. Meetings collection
+    // Owner can read and write meetings. Creation requires setting themselves as ownerId.
+    match /meetings/{meetingId} {
+      allow read, write: if isAuthenticated() && (
+        (resource != null && resource.data.ownerId == request.auth.uid) ||
+        (resource == null && request.resource.data.ownerId == request.auth.uid)
+      );
+
+      // Transcription segments
+      // Users can read their own meeting's segments, but writes are forbidden for clients
+      // (Admin SDK/Cloud Functions bypass these rules automatically).
+      match /segments/{segmentId} {
+        allow read: if isAuthenticated() && get(/databases/$(database)/documents/meetings/$(meetingId)).data.ownerId == request.auth.uid;
+        allow write: if false; // Cloud Functions write via Admin SDK
+      }
+
+      // Semantic/Executive analysis (summary_overview, summary_topics, summary_decisions, summary_tasks)
+      // Users can read, but writes are forbidden for clients.
+      match /analysis/{analysisType} {
+        allow read: if isAuthenticated() && get(/databases/$(database)/documents/meetings/$(meetingId)).data.ownerId == request.auth.uid;
+        allow write: if false; // Cloud Functions write via Admin SDK
+      }
+    }
+  }
+}

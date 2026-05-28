@@ -139,7 +139,20 @@ class MeetingRecorderService : Service() {
             return
         }
 
+        // Show Foreground service notification IMMEDIATELY here, before anything else!
+        val initialNotification = buildRecordingNotification(title, "Запуск записи...")
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(NOTIFICATION_ID, initialNotification, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
+            } else {
+                startForeground(NOTIFICATION_ID, initialNotification)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to start foreground recording service", e)
+        }
+
         if (filePath.isEmpty()) {
+            stopForeground(STOP_FOREGROUND_REMOVE)
             stopSelf()
             return
         }
@@ -166,8 +179,11 @@ class MeetingRecorderService : Service() {
 
             recorderInstance.apply {
                 setAudioSource(MediaRecorder.AudioSource.MIC)
-                setOutputFormat(MediaRecorder.OutputFormat.THREE_GPP)
-                setAudioEncoder(MediaRecorder.AudioEncoder.AMR_NB)
+                setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+                setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+                setAudioChannels(1)
+                setAudioSamplingRate(44100)
+                setAudioEncodingBitRate(128000)
                 setOutputFile(file.absolutePath)
                 prepare()
                 start()
@@ -175,18 +191,14 @@ class MeetingRecorderService : Service() {
             mediaRecorder = recorderInstance
             Log.i(TAG, "Started recorder with output path: $filePath")
 
-            // Show Foreground service notification
-            val notification = buildRecordingNotification(title, "Одет запись... 00:00")
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                startForeground(NOTIFICATION_ID, notification, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
-            } else {
-                startForeground(NOTIFICATION_ID, notification)
-            }
+            // Show updated recording status
+            updateNotification(title, "Идет запись... 00:00")
 
             startTimerAndAmplitude()
         } catch (e: Exception) {
             Log.e(TAG, "Failed starting media recorder step", e)
             _isRecordingAndActive.value = false
+            stopForeground(STOP_FOREGROUND_REMOVE)
             stopSelf()
         }
     }

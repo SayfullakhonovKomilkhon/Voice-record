@@ -9,7 +9,7 @@ import com.example.data.model.Meeting
 import com.example.data.model.VoiceProfile
 import com.example.data.model.DictionaryTerm
 
-@Database(entities = [Meeting::class, VoiceProfile::class, DictionaryTerm::class], version = 5, exportSchema = false)
+@Database(entities = [Meeting::class, VoiceProfile::class, DictionaryTerm::class], version = 6, exportSchema = false)
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun meetingDao(): MeetingDao

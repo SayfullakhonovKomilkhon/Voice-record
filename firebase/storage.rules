@@ -1,0 +1,22 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // Check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Check if user is the owner of the folder
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Rules for meetings audio file uploads
+    // Direct matches folder layout: meetings/{userId}/{meetingId}/audio_file.wav
+    match /meetings/{userId}/{meetingId}/{allPaths=**} {
+      allow read, write: if isOwner(userId);
+    }
+  }
+}

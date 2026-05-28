@@ -122,7 +122,7 @@ fun AuthScreen(
             confirmButton = {
                 Button(
                     onClick = {
-                        val activity = context as? FragmentActivity
+                        val activity = BiometricHelper.findFragmentActivity(context)
                         if (activity != null) {
                             BiometricHelper.showBiometricPrompt(
                                 activity = activity,

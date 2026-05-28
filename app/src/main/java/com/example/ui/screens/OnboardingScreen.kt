@@ -34,7 +34,7 @@ fun OnboardingScreen(
     var currentSlide by remember { mutableStateOf(0) }
     val isDark = isSystemInDarkTheme()
     
-    val accentColor = if (isDark) Color(0xFFADC6FF) else Color(0xFF005FAC)
+    val accentColor = MaterialTheme.colorScheme.primary
 
     Column(
         modifier = Modifier

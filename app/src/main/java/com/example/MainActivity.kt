@@ -18,6 +18,7 @@ import androidx.navigation.navArgument
 import com.example.data.local.SessionManager
 import com.example.ui.screens.AuthScreen
 import com.example.ui.screens.BiometricLockScreen
+import com.example.util.BiometricHelper
 import com.example.ui.screens.MeetingDetailScreen
 import com.example.ui.screens.MeetingListScreen
 import com.example.ui.screens.OnboardingScreen
@@ -29,10 +30,27 @@ import com.example.ui.screens.SubscriptionScreen
 import com.example.ui.screens.SettingsScreen
 import com.example.ui.theme.MyApplicationTheme
 import com.example.ui.viewmodel.MeetingViewModel
+import com.example.data.firebase.FirebaseManager
+import android.util.Log
 
 class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        
+        // 1. Establish an uncaught exception handler to safely capture and log any app crashes on launch
+        val oldHandler = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+            Log.e("FATAL_LAUNCH_CRASH", "Uncaught exception on thread: ${thread.name}", throwable)
+            oldHandler?.uncaughtException(thread, throwable)
+        }
+
+        // 2. Initialize safe Firebase managers/contexts prior to first composition state flow accesses
+        try {
+            FirebaseManager.initialize(applicationContext)
+        } catch (e: Exception) {
+            Log.e("MainActivity", "Caught startup exception during FirebaseManager initialize: ${e.localizedMessage}", e)
+        }
+
         enableEdgeToEdge()
         setContent {
             MyApplicationTheme {
@@ -50,7 +68,7 @@ class MainActivity : FragmentActivity() {
                             "onboarding"
                         } else if (!sessionManager.isLoggedIn) {
                             "auth"
-                        } else if (sessionManager.isBiometricEnabled) {
+                        } else if (sessionManager.isBiometricEnabled && BiometricHelper.isBiometricAvailable(applicationContext)) {
                             "biometric_lock"
                         } else {
                             "list"

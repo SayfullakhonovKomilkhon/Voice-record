@@ -2,20 +2,19 @@ package com.example.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// Professional Polish - Light Theme Palette
-val CorporatePrimaryLight = Color(0xFF005FAC)     // Elegant Blue Accent
-val CorporateSecondaryLight = Color(0xFF44474E)   // Cool slate-gray
-val CorporateTertiaryLight = Color(0xFFE1E2EC)    // Light Lavender-Gray
-val CorporateBackgroundLight = Color(0xFFFDFBFF)  // Main Light Canvas
-val CorporateSurfaceLight = Color(0xFFFFFFFF)     // Card White
+// Modern Premium Aesthetic - Color Palette
+val CorporatePrimaryLight = Color(0xFF5F59F7)     // Vibrant Indigo Accent
+val CorporateSecondaryLight = Color(0xFF0EA5E9)   // Electric Sky Blue
+val CorporateTertiaryLight = Color(0xFFF1F5F9)    // Soft Silver Slate
+val CorporateBackgroundLight = Color(0xFFF8FAFC)  // Pure Slate Light Canvas
+val CorporateSurfaceLight = Color(0xFFFFFFFF)     // High-Fidelity White Cards
 val CorporateOnPrimaryLight = Color(0xFFFFFFFF)
-val CleanBorderLight = Color(0xFFDDE2EA)          // Subtle card border
-val SlateBlueContainer = Color(0xFFD3E4FF)        // High contrast Blue chip container
+val CleanBorderLight = Color(0xFFE2E8F0)          // Super Clean light border
+val SlateBlueContainer = Color(0xFFE0E7FF)        // Light Indigo container chip
 
-// Professional Polish - Dark Theme Palette
-val CorporatePrimaryDark = Color(0xFFADC6FF)      // High clarity soft blue
-val CorporateSecondaryDark = Color(0xFFC4C6D0)    // Muted light gray
-val CorporateTertiaryDark = Color(0xFF43474E)     // Dark Lavender-Gray
-val CorporateBackgroundDark = Color(0xFF111318)   // Near-black dark canvas
-val CorporateSurfaceDark = Color(0xFF1F242F)      // Slate Card surface
-val CorporateOnPrimaryDark = Color(0xFF002F5D)
+val CorporatePrimaryDark = Color(0xFF908CFF)      // Tech neon lavender-indigo
+val CorporateSecondaryDark = Color(0xFF38BDF8)    // Neon Sky Blue
+val CorporateTertiaryDark = Color(0xFF1E293B)     // Cool Slate
+val CorporateBackgroundDark = Color(0xFF090D16)   // Deep Cosmic Space Dark
+val CorporateSurfaceDark = Color(0xFF131A2A)      // Premium dark container slate
+val CorporateOnPrimaryDark = Color(0xFF0B0F19)

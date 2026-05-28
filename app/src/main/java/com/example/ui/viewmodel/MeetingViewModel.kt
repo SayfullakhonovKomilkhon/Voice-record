@@ -1,6 +1,7 @@
 package com.example.ui.viewmodel
 
 import android.app.Application
+import com.squareup.moshi.JsonClass
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -77,6 +78,9 @@ class MeetingViewModel(application: Application) : AndroidViewModel(application)
     private val _participantB = MutableStateFlow("Сергей")
     val participantB: StateFlow<String> = _participantB.asStateFlow()
 
+    private val _additionalParticipants = MutableStateFlow<List<String>>(emptyList())
+    val additionalParticipants: StateFlow<List<String>> = _additionalParticipants.asStateFlow()
+
     private val _meetingTitle = MutableStateFlow("")
     val meetingTitle: StateFlow<String> = _meetingTitle.asStateFlow()
 
@@ -101,6 +105,149 @@ class MeetingViewModel(application: Application) : AndroidViewModel(application)
 
     fun resetPremiumLimitReached() {
         _premiumLimitReached.value = false
+    }
+
+    // --- AI SEMANTIC SEARCH STATE & METHODS ---
+    private val _isSemanticSearching = MutableStateFlow(false)
+    val isSemanticSearching: StateFlow<Boolean> = _isSemanticSearching.asStateFlow()
+
+    private val _semanticSearchResultIds = MutableStateFlow<Set<Long>?>(null)
+    val semanticSearchResultIds: StateFlow<Set<Long>?> = _semanticSearchResultIds.asStateFlow()
+
+    private val _semanticSearchExplanations = MutableStateFlow<Map<Long, String>>(emptyMap())
+    val semanticSearchExplanations: StateFlow<Map<Long, String>> = _semanticSearchExplanations.asStateFlow()
+
+    private val _semanticSearchEnabled = MutableStateFlow(false)
+    val semanticSearchEnabled: StateFlow<Boolean> = _semanticSearchEnabled.asStateFlow()
+
+    fun toggleSemanticSearch(enabled: Boolean) {
+        _semanticSearchEnabled.value = enabled
+        if (!enabled) {
+            _semanticSearchResultIds.value = null
+            _semanticSearchExplanations.value = emptyMap()
+        }
+    }
+
+    fun executeSemanticSearch(query: String) {
+        if (query.isBlank()) {
+            _semanticSearchResultIds.value = null
+            _semanticSearchExplanations.value = emptyMap()
+            return
+        }
+
+        _isSemanticSearching.value = true
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val meetingsList = allMeetings.value
+                if (meetingsList.isEmpty()) {
+                    _semanticSearchResultIds.value = emptySet()
+                    _semanticSearchExplanations.value = emptyMap()
+                    _isSemanticSearching.value = false
+                    return@launch
+                }
+
+                val meetingsContext = meetingsList.joinToString("\n\n") { m ->
+                    """
+                    ID: ${m.id}
+                    Название: ${m.title}
+                    Участники: ${m.participantA} и ${m.participantB}
+                    Сводка: ${m.summaryOverview ?: ""}
+                    Темы: ${m.summaryTopics?.joinToString(", ") ?: ""}
+                    Решения: ${m.summaryDecisions?.joinToString(", ") ?: ""}
+                    Задачи: ${m.summaryTasks?.joinToString(", ") { "${it.assignedTo}: ${it.taskText}" } ?: ""}
+                    Транскрипт реплик: ${m.transcript?.take(10)?.joinToString(" / ") { "${it.speaker}: ${it.text}" } ?: ""}
+                    """.trimIndent()
+                }
+
+                val systemPrompt = "Ты — эксперт баз данных встреч и семантического поиска Google Gemini. Твоя задача — отобрать только те встречи, которые семантически соответствуют поисковому запросу. Ответ сформируй СТРОГО в формате JSON."
+
+                val prompt = """
+                    База данных встреч содержит следующие записи:
+                    
+                    $meetingsContext
+                    
+                    Поисковый запрос пользователя: "$query"
+                    
+                    Найди встречи, которые подходят под запрос семантически (например, если спрашивают про финансы, подходят встречи про бюджеты, рубли, доллары, цены, рекламный лимит и т.д.).
+                    Верни результат строго в формате JSON, содержащий список объектов для совпавших встреч.
+                    Объект должен иметь: "id" (Long) и "explanation" (String — короткое объяснение на русском языке в одно предложение, почему эта встреча совпала).
+                    
+                    Пример ответа:
+                    {
+                      "results": [
+                        { "id": 5, "explanation": "Встреча содержит детальное обсуждение выделения 120 000 рублей на таргетированную рекламу." }
+                      ]
+                    }
+                    
+                    Верни СТРОГО валидный JSON, без markdown-разметки или backticks (```json). Если ни одна встреча не совпала, верни пустой список "results": [].
+                """.trimIndent()
+
+                val apiKey = try { com.example.BuildConfig.GEMINI_API_KEY } catch (e: Exception) { "" }
+                if (apiKey.isEmpty() || apiKey == "MY_GEMINI_API_KEY") {
+                    val matchingIds = meetingsList.filter { m ->
+                        m.title.contains(query, ignoreCase = true) ||
+                        (m.summaryOverview?.contains(query, ignoreCase = true) == true) ||
+                        (m.summaryDecisions?.any { it.contains(query, ignoreCase = true) } == true)
+                    }.map { it.id }.toSet()
+
+                    _semanticSearchResultIds.value = matchingIds
+                    _semanticSearchExplanations.value = matchingIds.associateWith { "Простое совпадение по тексту (Gemini API ключ не настроен)" }
+                    _isSemanticSearching.value = false
+                    return@launch
+                }
+
+                val request = com.example.data.api.GeminiRequest(
+                    contents = listOf(
+                        com.example.data.api.Content(
+                            parts = listOf(com.example.data.api.Part(text = prompt))
+                        )
+                    ),
+                    generationConfig = com.example.data.api.GenerationConfig(
+                        responseMimeType = "application/json",
+                        temperature = 0.2f
+                    ),
+                    systemInstruction = com.example.data.api.Content(parts = listOf(com.example.data.api.Part(text = systemPrompt)))
+                )
+
+                val response = com.example.data.api.RetrofitClient.service.generateContent(apiKey, request)
+                val jsonText = response.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text ?: ""
+                
+                val resultsIds = mutableSetOf<Long>()
+                val resultsExplanations = mutableMapOf<Long, String>()
+                
+                try {
+                    val moshi = com.squareup.moshi.Moshi.Builder()
+                        .add(com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory())
+                        .build()
+                    val adapter = moshi.adapter(SearchResultWrapper::class.java)
+                    val wrapper = adapter.fromJson(jsonText.trim().removePrefix("```json").removePrefix("```JSON").removeSuffix("```").trim())
+                    wrapper?.results?.forEach {
+                        resultsIds.add(it.id)
+                        resultsExplanations[it.id] = it.explanation
+                    }
+                } catch (parseEx: Exception) {
+                    Log.e("MeetingViewModel", "Failed to parse semantic search json via Moshi, raw was: $jsonText", parseEx)
+                    val idPattern = """"id"\s*:\s*(\d+)""".toRegex()
+                    val explanationPattern = """"explanation"\s*:\s*"([^"]+)"""".toRegex()
+                    
+                    val ids = idPattern.findAll(jsonText).map { it.groupValues[1].toLong() }.toList()
+                    val exps = explanationPattern.findAll(jsonText).map { it.groupValues[1] }.toList()
+                    
+                    for (i in ids.indices) {
+                        val parsedId = ids[i]
+                        resultsIds.add(parsedId)
+                        resultsExplanations[parsedId] = exps.getOrNull(i) ?: "Найдено по смыслу"
+                    }
+                }
+
+                _semanticSearchResultIds.value = resultsIds
+                _semanticSearchExplanations.value = resultsExplanations
+            } catch (e: Exception) {
+                Log.e("MeetingViewModel", "Semantic search failed", e)
+            } finally {
+                _isSemanticSearching.value = false
+            }
+        }
     }
 
     fun calculateCurrentMonthRecordingDurationMs(): Long {
@@ -150,6 +297,7 @@ class MeetingViewModel(application: Application) : AndroidViewModel(application)
 
     fun setParticipantA(name: String) { _participantA.value = name }
     fun setParticipantB(name: String) { _participantB.value = name }
+    fun setAdditionalParticipants(list: List<String>) { _additionalParticipants.value = list }
     fun setMeetingTitle(title: String) { _meetingTitle.value = title }
     fun clearError() { _apiError.value = null }
 
@@ -168,7 +316,7 @@ class MeetingViewModel(application: Application) : AndroidViewModel(application)
         _premiumLimitReached.value = false
         
         val timestamp = System.currentTimeMillis()
-        val file = File(getApplication<Application>().filesDir, "recording_$timestamp.3gpp")
+        val file = File(getApplication<Application>().filesDir, "recording_$timestamp.m4a")
         
         recordingStartTime = System.currentTimeMillis()
         activeRecordingFile = file
@@ -204,12 +352,14 @@ class MeetingViewModel(application: Application) : AndroidViewModel(application)
                     audioFilePath = file.absolutePath,
                     status = MeetingStatus.TRANSCRIPTION_PENDING,
                     participantA = _participantA.value,
-                    participantB = _participantB.value
+                    participantB = _participantB.value,
+                    additionalParticipants = _additionalParticipants.value
                 )
                 val newId = repository.insertMeeting(meeting)
 
                 // Reset inputs for next meeting
                 _meetingTitle.value = ""
+                _additionalParticipants.value = emptyList()
 
                 // 2. Start the foreground processing service
                 com.example.util.MeetingProcessingService.startService(getApplication(), newId)
@@ -400,7 +550,7 @@ class MeetingViewModel(application: Application) : AndroidViewModel(application)
         if (_isProfileRecording.value) return false
         
         val timestamp = System.currentTimeMillis()
-        val file = File(getApplication<Application>().filesDir, "profile_$timestamp.3gpp")
+        val file = File(getApplication<Application>().filesDir, "profile_$timestamp.m4a")
         
         profileStartTime = System.currentTimeMillis()
         val started = recorder.start(file)
@@ -578,3 +728,14 @@ class MeetingViewModel(application: Application) : AndroidViewModel(application)
         amplitudeJob?.cancel()
     }
 }
+
+@JsonClass(generateAdapter = true)
+data class SearchResultWrapper(
+    val results: List<SearchResultItem>
+)
+
+@JsonClass(generateAdapter = true)
+data class SearchResultItem(
+    val id: Long,
+    val explanation: String
+)

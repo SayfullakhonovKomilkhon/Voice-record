@@ -6,6 +6,7 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.border
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -24,6 +25,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -35,6 +38,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.draw.scale
 import androidx.core.content.ContextCompat
 import com.example.data.model.Meeting
 import com.example.data.model.MeetingStatus
@@ -66,7 +71,13 @@ fun MeetingListScreen(
     val processingId by viewModel.processingMeetingId.collectAsState()
     val apiError by viewModel.apiError.collectAsState()
 
+    val isSemanticSearching by viewModel.isSemanticSearching.collectAsState()
+    val semanticSearchResultIds by viewModel.semanticSearchResultIds.collectAsState()
+    val semanticSearchExplanations by viewModel.semanticSearchExplanations.collectAsState()
+    val semanticSearchEnabled by viewModel.semanticSearchEnabled.collectAsState()
+
     val context = LocalContext.current
+
     var showRecordPanel by remember { mutableStateOf(false) }
     var meetingToDelete by remember { mutableStateOf<Meeting?>(null) }
 
@@ -98,6 +109,13 @@ fun MeetingListScreen(
 
     var meetingToManageTags by remember { mutableStateOf<Meeting?>(null) }
     var tagInputText by remember { mutableStateOf("") }
+
+    LaunchedEffect(searchQuery, semanticSearchEnabled) {
+        if (semanticSearchEnabled) {
+            kotlinx.coroutines.delay(800)
+            viewModel.executeSemanticSearch(searchQuery)
+        }
+    }
 
     // Helper functions for dates
     fun isToday(timeMs: Long): Boolean {
@@ -155,9 +173,11 @@ fun MeetingListScreen(
         showFavoritesOnly,
         selectedPeriod,
         selectedParticipants,
-        selectedTags
+        selectedTags,
+        semanticSearchEnabled,
+        semanticSearchResultIds
     ) {
-        val searchTokens = if (searchQuery.isNotBlank()) {
+        val searchTokens = if (searchQuery.isNotBlank() && !semanticSearchEnabled) {
             val words = searchQuery.lowercase(Locale("ru")).split("\\s+".toRegex()).filter { it.isNotBlank() }
             val expanded = mutableListOf<String>()
             val dict = mapOf(
@@ -198,7 +218,8 @@ fun MeetingListScreen(
             if (selectedParticipants.isNotEmpty()) {
                 val hasSelected = selectedParticipants.any { part ->
                     meeting.participantA.equals(part, ignoreCase = true) ||
-                    meeting.participantB.equals(part, ignoreCase = true)
+                    meeting.participantB.equals(part, ignoreCase = true) ||
+                    meeting.additionalParticipants.any { it.equals(part, ignoreCase = true) }
                 }
                 if (!hasSelected) return@filter false
             }
@@ -210,10 +231,16 @@ fun MeetingListScreen(
                 if (!hasAllTags) return@filter false
             }
 
-            if (searchTokens.isNotEmpty()) {
+            if (semanticSearchEnabled && searchQuery.isNotBlank()) {
+                val allowedIds = semanticSearchResultIds
+                if (allowedIds != null && !allowedIds.contains(meeting.id)) {
+                    return@filter false
+                }
+            } else if (searchTokens.isNotEmpty()) {
                 val matchesTitle = isMatch(meeting.title, searchTokens)
                 val matchesPartA = isMatch(meeting.participantA, searchTokens)
                 val matchesPartB = isMatch(meeting.participantB, searchTokens)
+                val matchesPartC = meeting.additionalParticipants.any { isMatch(it, searchTokens) }
                 val matchesOverview = isMatch(meeting.summaryOverview, searchTokens)
                 val matchesTopics = meeting.summaryTopics?.any { isMatch(it, searchTokens) } == true
                 val matchesDecisions = meeting.summaryDecisions?.any { isMatch(it, searchTokens) } == true
@@ -221,7 +248,7 @@ fun MeetingListScreen(
                 val matchesTags = meeting.tags.any { isMatch(it, searchTokens) }
                 val matchesTranscript = meeting.transcript?.any { isMatch(it.text, searchTokens) } == true
 
-                if (!matchesTitle && !matchesPartA && !matchesPartB && !matchesOverview &&
+                if (!matchesTitle && !matchesPartA && !matchesPartB && !matchesPartC && !matchesOverview &&
                     !matchesTopics && !matchesDecisions && !matchesTasks && !matchesTags && !matchesTranscript
                 ) {
                     return@filter false
@@ -234,12 +261,48 @@ fun MeetingListScreen(
 
     val filtersActive = showFavoritesOnly || selectedPeriod != "All" || selectedParticipants.isNotEmpty() || selectedTags.isNotEmpty()
 
+    val totalAirtimeMs = remember(meetings) { meetings.sumOf { it.durationMs } }
+    val totalAirtimeMin = remember(totalAirtimeMs) { totalAirtimeMs / (1000 * 60) }
+    val favoritesCount = remember(meetings) { meetings.count { it.isFavorite } }
+
+    val isDark = isSystemInDarkTheme()
+
     Scaffold(
+        containerColor = Color.Transparent,
+        modifier = Modifier
+            .fillMaxSize()
+            .drawBehind {
+                val radius = size.minDimension * 0.8f
+                // Top-right soft Neon Indigo halo
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        colors = if (isDark) {
+                            listOf(Color(0xFF5F59F7).copy(alpha = 0.12f), Color.Transparent)
+                        } else {
+                            listOf(Color(0xFF5F59F7).copy(alpha = 0.07f), Color.Transparent)
+                        },
+                        center = androidx.compose.ui.geometry.Offset(size.width * 0.95f, size.height * 0.05f),
+                        radius = radius
+                    )
+                )
+                // Bottom-left soft Cyber Sky halo
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        colors = if (isDark) {
+                            listOf(Color(0xFF0EA5E9).copy(alpha = 0.12f), Color.Transparent)
+                        } else {
+                            listOf(Color(0xFF0EA5E9).copy(alpha = 0.07f), Color.Transparent)
+                        },
+                        center = androidx.compose.ui.geometry.Offset(size.width * 0.05f, size.height * 0.95f),
+                        radius = radius
+                    )
+                )
+            },
         topBar = {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.background)
+                    .background(Color.Transparent)
                     .statusBarsPadding()
                     .padding(start = 24.dp, end = 24.dp, top = 20.dp, bottom = 12.dp)
             ) {
@@ -447,6 +510,40 @@ fun MeetingListScreen(
                     }
                 }
 
+                // Semantic search chip bar
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    FilterChip(
+                        selected = semanticSearchEnabled,
+                        onClick = { viewModel.toggleSemanticSearch(!semanticSearchEnabled) },
+                        label = {
+                            Text(
+                                text = "ИИ-Поиск по смыслу (Gemini)",
+                                style = MaterialTheme.typography.labelSmall
+                            )
+                        },
+                        leadingIcon = {
+                            if (isSemanticSearching) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(12.dp),
+                                    strokeWidth = 1.5.dp,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Default.AutoAwesome,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(12.dp)
+                                )
+                            }
+                        },
+                        modifier = Modifier.testTag("semantic_search_chip")
+                    )
+                }
+
                 // Collapsible detailed filters panel
                 AnimatedVisibility(
                     visible = showFiltersPanel,
@@ -636,6 +733,130 @@ fun MeetingListScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
+            Column(
+                modifier = Modifier.fillMaxSize()
+            ) {
+                // Stats Dashboard
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // Card 1
+                Card(
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.04f)
+                    ),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 10.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Assessment,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = "${meetings.size}",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "Всего встреч",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontSize = 9.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                        )
+                    }
+                }
+
+                // Card 2
+                Card(
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.04f)
+                    ),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary.copy(alpha = 0.12f)),
+                    modifier = Modifier.weight(1.1f)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 10.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Timelapse,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.secondary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = "$totalAirtimeMin мин",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "Время эфира",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontSize = 9.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                        )
+                    }
+                }
+
+                // Card 3
+                Card(
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (isDark) Color(0xFFEF4444).copy(alpha = 0.05f) else Color(0xFFEF4444).copy(alpha = 0.03f)
+                    ),
+                    border = BorderStroke(1.dp, Color(0xFFEF4444).copy(alpha = 0.15f)),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 10.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Favorite,
+                            contentDescription = null,
+                            tint = Color(0xFFEF4444),
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = "$favoritesCount",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = Color(0xFFEF4444)
+                        )
+                        Text(
+                            text = "Избранные",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontSize = 9.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                        )
+                    }
+                }
+            }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .weight(1f)
+            ) {
             if (filteredMeetings.isEmpty()) {
                 // Beautiful Minimalist empty state / Search placeholder empty state
                 Column(
@@ -677,6 +898,7 @@ fun MeetingListScreen(
                             meeting = meeting,
                             isPlaying = currentPlayingId == meeting.id,
                             isCurrentlyAnalyzing = processingId == meeting.id,
+                            aiExplanation = if (semanticSearchEnabled) semanticSearchExplanations[meeting.id] else null,
                             onPlayToggle = {
                                 if (currentPlayingId == meeting.id) {
                                     viewModel.stopPlaying()
@@ -704,6 +926,8 @@ fun MeetingListScreen(
                     }
                 }
             }
+            }
+        }
 
             // Beautiful Floating bottom indicator for ongoing background recording session
             AnimatedVisibility(
@@ -897,6 +1121,7 @@ fun MeetingCard(
     meeting: Meeting,
     isPlaying: Boolean,
     isCurrentlyAnalyzing: Boolean,
+    aiExplanation: String? = null,
     onPlayToggle: () -> Unit,
     onDeleteClick: () -> Unit,
     onCardClick: () -> Unit,
@@ -915,12 +1140,34 @@ fun MeetingCard(
 
     val isDark = isSystemInDarkTheme()
 
+    // Breathing pulse scale animation for active items
+    val infiniteTransition = rememberInfiniteTransition(label = "playback_pulse")
+    val pulseScale by if (isPlaying) {
+        infiniteTransition.animateFloat(
+            initialValue = 1f,
+            targetValue = 1.15f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(1200, easing = LinearEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "scale"
+        )
+    } else {
+        remember { mutableStateOf(1f) }
+    }
+
     Card(
         onClick = onCardClick,
-        shape = RoundedCornerShape(24.dp),
+        shape = RoundedCornerShape(20.dp),
         border = BorderStroke(
             width = 1.dp,
-            color = if (isDark) Color(0xFF2D323E) else Color(0xFFDDE2EA)
+            color = if (isPlaying) {
+                MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+            } else if (isDark) {
+                Color(0xFF2D323E)
+            } else {
+                Color(0xFFDDE2EA)
+            }
         ),
         colors = CardDefaults.cardColors(
             containerColor = if (isCurrentlyAnalyzing) {
@@ -930,121 +1177,150 @@ fun MeetingCard(
             },
             contentColor = MaterialTheme.colorScheme.onSurface
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-        modifier = Modifier.fillMaxWidth()
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = if (isPlaying) 6.dp else 1.5.dp
+        ),
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("meeting_card_${meeting.id}")
     ) {
-        Column(
+        Row(
             modifier = Modifier
-                .padding(18.dp)
                 .fillMaxWidth()
+                .height(IntrinsicSize.Min) // perfectly matches heights of siblings!
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
+            // High-contrast, premium left status accent stripe
+            val statusColor = when (meeting.status) {
+                MeetingStatus.COMPLETED -> MaterialTheme.colorScheme.primary
+                MeetingStatus.TRANSCRIPTION_PENDING -> MaterialTheme.colorScheme.secondary
+                MeetingStatus.FAILED -> MaterialTheme.colorScheme.error
+                else -> MaterialTheme.colorScheme.outlineVariant
+            }
+            Box(
+                modifier = Modifier
+                    .width(6.dp)
+                    .fillMaxHeight()
+                    .background(
+                        brush = Brush.verticalGradient(
+                            colors = listOf(statusColor, statusColor.copy(alpha = 0.5f))
+                        )
+                    )
+            )
+
+            Column(
+                modifier = Modifier
+                    .padding(18.dp)
+                    .fillMaxWidth()
+                    .weight(1f)
             ) {
-                // Audio control button
-                IconButton(
-                    onClick = onPlayToggle,
-                    enabled = meeting.status == MeetingStatus.COMPLETED,
-                    colors = IconButtonDefaults.iconButtonColors(
-                        containerColor = if (isPlaying) {
-                            MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
-                        } else {
-                            MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
-                        },
-                        contentColor = MaterialTheme.colorScheme.primary
-                    ),
-                    modifier = Modifier
-                        .size(48.dp)
-                        .clip(RoundedCornerShape(12.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(
-                        imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                        contentDescription = if (isPlaying) "Пауза" else "Воспроизвести"
-                    )
-                }
-
-                Spacer(modifier = Modifier.width(16.dp))
-
-                // Metadata details
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = meeting.title,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    // Audio control button
+                    IconButton(
+                        onClick = onPlayToggle,
+                        enabled = meeting.status == MeetingStatus.COMPLETED,
+                        colors = IconButtonDefaults.iconButtonColors(
+                            containerColor = if (isPlaying) {
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                            } else {
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
+                            },
+                            contentColor = MaterialTheme.colorScheme.primary
+                        ),
+                        modifier = Modifier
+                            .size(44.dp)
+                            .scale(pulseScale)
+                            .testTag("playback_toggle_${meeting.id}")
                     ) {
-                        Text(
-                            text = dateText,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                        Icon(
+                            imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                            contentDescription = if (isPlaying) "Приостановить" else "Воспроизвести",
+                            modifier = Modifier.size(24.dp)
                         )
-                        Box(
-                            modifier = Modifier
-                                .size(3.dp)
-                                .clip(RoundedCornerShape(1.5.dp))
-                                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f))
-                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(12.dp))
+
+                    // Title and date metadata
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = durationText,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                            fontWeight = FontWeight.SemiBold
+                            text = meeting.title.ifBlank { "Без названия" },
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.CalendarToday,
+                                contentDescription = null,
+                                modifier = Modifier.size(10.dp),
+                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "$dateText • $durationText",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.width(4.dp))
+
+                    // Favorite button
+                    IconButton(
+                        onClick = onFavoriteToggle,
+                        modifier = Modifier
+                            .size(36.dp)
+                            .testTag("favorite_button_${meeting.id}")
+                    ) {
+                        Icon(
+                            imageVector = if (meeting.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                            contentDescription = "Избранное",
+                            tint = if (meeting.isFavorite) Color.Red else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(4.dp))
+
+                    // Manage tags button
+                    IconButton(
+                        onClick = onManageTagsClick,
+                        modifier = Modifier
+                            .size(36.dp)
+                            .testTag("manage_tags_button_${meeting.id}")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Label,
+                            contentDescription = "Теги",
+                            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(4.dp))
+
+                    // Delete Button
+                    IconButton(
+                        onClick = onDeleteClick,
+                        modifier = Modifier
+                            .size(36.dp)
+                            .testTag("delete_button_${meeting.id}")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.DeleteOutline,
+                            contentDescription = "Удалить",
+                            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
                         )
                     }
                 }
-
-                Spacer(modifier = Modifier.width(4.dp))
-
-                // Favorite button
-                IconButton(
-                    onClick = onFavoriteToggle,
-                    modifier = Modifier.size(36.dp)
-                ) {
-                    Icon(
-                        imageVector = if (meeting.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                        contentDescription = "Избранное",
-                        tint = if (meeting.isFavorite) Color.Red else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-
-                Spacer(modifier = Modifier.width(4.dp))
-
-                // Manage tags button
-                IconButton(
-                    onClick = onManageTagsClick,
-                    modifier = Modifier.size(36.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Label,
-                        contentDescription = "Теги",
-                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-
-                Spacer(modifier = Modifier.width(4.dp))
-
-                // Delete Button
-                IconButton(
-                    onClick = onDeleteClick,
-                    modifier = Modifier.size(36.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.DeleteOutline,
-                        contentDescription = "Удалить",
-                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
-                    )
-                }
-            }
 
             Spacer(modifier = Modifier.height(12.dp))
 
@@ -1066,8 +1342,11 @@ fun MeetingCard(
                         modifier = Modifier.size(14.dp),
                         tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
                     )
+                    val allParts = (listOf(meeting.participantA, meeting.participantB) + meeting.additionalParticipants)
+                        .filter { it.isNotBlank() }
+                        .distinct()
                     Text(
-                        text = "${meeting.participantA} • ${meeting.participantB}",
+                        text = allParts.joinToString(" • "),
                         style = MaterialTheme.typography.labelSmall,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -1146,6 +1425,34 @@ fun MeetingCard(
                 }
             }
 
+            // AI Explanation banner if matched by semantic search
+            if (!aiExplanation.isNullOrEmpty()) {
+                Spacer(modifier = Modifier.height(10.dp))
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.08f))
+                        .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.15f), RoundedCornerShape(12.dp))
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.AutoAwesome,
+                        contentDescription = "AI-совпадение",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = aiExplanation,
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+
             // High-end elegant Transcript quote preview bubble (matches design concept precisely!)
             val firstUtteranceText = remember(meeting.transcript) {
                 meeting.transcript?.firstOrNull()?.text
@@ -1205,6 +1512,7 @@ fun MeetingCard(
             }
         }
     }
+}
 }
 
 @Composable

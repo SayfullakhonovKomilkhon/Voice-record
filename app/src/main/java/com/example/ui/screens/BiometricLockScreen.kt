@@ -38,8 +38,8 @@ fun BiometricLockScreen(
     val accentColor = if (isDark) Color(0xFFADC6FF) else Color(0xFF005FAC)
     
     val triggerBiometricVerification = {
-        val activity = context as? FragmentActivity
-        if (activity != null) {
+        val activity = BiometricHelper.findFragmentActivity(context)
+        if (activity != null && BiometricHelper.isBiometricAvailable(context)) {
             BiometricHelper.showBiometricPrompt(
                 activity = activity,
                 title = "Авторизация в Deals Recorder",
@@ -54,7 +54,7 @@ fun BiometricLockScreen(
                 }
             )
         } else {
-            // Fallback in environments without host fragment support
+            // Fallback in environments without host fragment or biometric support (e.g. Emulator)
             onAuthPassed()
         }
     }

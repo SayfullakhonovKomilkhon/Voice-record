@@ -69,7 +69,12 @@ object MeetingExportHelper {
                 <h1>${meeting.title}</h1>
                 <div class="meta">
                     <strong>Дата и время:</strong> ${formattedDate}<br>
-                    <strong>Участники беседы:</strong> ${meeting.participantA} • ${meeting.participantB}
+                    <strong>Участники беседы:</strong> ${
+                        (listOf(meeting.participantA, meeting.participantB) + meeting.additionalParticipants)
+                            .filter { it.isNotBlank() }
+                            .distinct()
+                            .joinToString(" • ")
+                    }
                 </div>
 
                 <h2>Резюме встречи</h2>
@@ -206,7 +211,11 @@ object MeetingExportHelper {
 
         // Draw Document title
         generator.drawText(meeting.title, titlePaint, spacing = 8f)
-        generator.drawText("Дата: $formattedDate | Собеседники: ${meeting.participantA} и ${meeting.participantB}", metaPaint, spacing = 16f)
+        val allParticipantsStr = (listOf(meeting.participantA, meeting.participantB) + meeting.additionalParticipants)
+            .filter { it.isNotBlank() }
+            .distinct()
+            .joinToString(", ")
+        generator.drawText("Дата: $formattedDate | Собеседники: $allParticipantsStr", metaPaint, spacing = 16f)
         generator.drawHorizontalLine("#DADCE0", height = 1.5f, spacing = 14f)
 
         // 1. Резюме

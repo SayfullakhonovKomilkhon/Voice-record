@@ -21,6 +21,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -47,6 +49,7 @@ fun CreateMeetingScreen(
     var titleInput by remember { mutableStateOf("") }
     var participantAInput by remember { mutableStateOf("Иван") }
     var participantBInput by remember { mutableStateOf("Сергей") }
+    var additionalParticipantsInput by remember { mutableStateOf(listOf<String>()) }
 
     var expandedA by remember { mutableStateOf(false) }
     var expandedB by remember { mutableStateOf(false) }
@@ -66,6 +69,34 @@ fun CreateMeetingScreen(
     }
 
     Scaffold(
+        containerColor = Color.Transparent,
+        modifier = Modifier
+            .fillMaxSize()
+            .drawBehind {
+                val radius = size.minDimension * 0.8f
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        colors = if (isDark) {
+                            listOf(Color(0xFF5F59F7).copy(alpha = 0.12f), Color.Transparent)
+                        } else {
+                            listOf(Color(0xFF5F59F7).copy(alpha = 0.07f), Color.Transparent)
+                        },
+                        center = androidx.compose.ui.geometry.Offset(size.width * 0.95f, size.height * 0.05f),
+                        radius = radius
+                    )
+                )
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        colors = if (isDark) {
+                            listOf(Color(0xFF0EA5E9).copy(alpha = 0.12f), Color.Transparent)
+                        } else {
+                            listOf(Color(0xFF0EA5E9).copy(alpha = 0.07f), Color.Transparent)
+                        },
+                        center = androidx.compose.ui.geometry.Offset(size.width * 0.05f, size.height * 0.95f),
+                        radius = radius
+                    )
+                )
+            },
         topBar = {
             TopAppBar(
                 title = {
@@ -84,7 +115,7 @@ fun CreateMeetingScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background
+                    containerColor = Color.Transparent
                 )
             )
         }
@@ -93,7 +124,7 @@ fun CreateMeetingScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .background(MaterialTheme.colorScheme.background)
+                .background(Color.Transparent)
                 .padding(horizontal = 24.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(24.dp)
         ) {
@@ -291,6 +322,127 @@ fun CreateMeetingScreen(
                 }
             }
 
+            // Other dynamic participants
+            additionalParticipantsInput.forEachIndexed { index, value ->
+                item(key = "additional_part_$index") {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Дополнительный участник ${index + 1}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            IconButton(
+                                onClick = {
+                                    additionalParticipantsInput = additionalParticipantsInput.toMutableList().apply {
+                                        removeAt(index)
+                                    }
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Delete,
+                                    contentDescription = "Удалить участника",
+                                    tint = MaterialTheme.colorScheme.error
+                                )
+                            }
+                        }
+
+                        var isExpanded by remember { mutableStateOf(false) }
+
+                        ExposedDropdownMenuBox(
+                            expanded = isExpanded,
+                            onExpandedChange = { isExpanded = !isExpanded }
+                        ) {
+                            OutlinedTextField(
+                                value = value,
+                                onValueChange = { newValue ->
+                                    additionalParticipantsInput = additionalParticipantsInput.toMutableList().apply {
+                                        set(index, newValue)
+                                    }
+                                },
+                                label = { Text("Введите имя или выберите профиль") },
+                                placeholder = { Text("Например: Алексей Смирнов") },
+                                singleLine = true,
+                                shape = RoundedCornerShape(12.dp),
+                                trailingIcon = {
+                                    IconButton(onClick = { isExpanded = !isExpanded }) {
+                                        Icon(
+                                            imageVector = Icons.Default.ArrowDropDown,
+                                            contentDescription = "Выбрать профиль"
+                                        )
+                                    }
+                                },
+                                colors = TextFieldDefaults.colors(
+                                    focusedContainerColor = Color.Transparent,
+                                    unfocusedContainerColor = Color.Transparent
+                                ),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .menuAnchor()
+                            )
+
+                            ExposedDropdownMenu(
+                                expanded = isExpanded,
+                                onDismissRequest = { isExpanded = false }
+                            ) {
+                                if (profiles.isEmpty()) {
+                                    DropdownMenuItem(
+                                        text = { Text("Нет профилей голоса") },
+                                        enabled = false,
+                                        onClick = {}
+                                    )
+                                } else {
+                                    profiles.forEach { profile ->
+                                        DropdownMenuItem(
+                                            text = {
+                                                Row(
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Outlined.RecordVoiceOver,
+                                                        contentDescription = null,
+                                                        tint = MaterialTheme.colorScheme.primary,
+                                                        modifier = Modifier.size(16.dp)
+                                                    )
+                                                    Text("${profile.name} (${profile.relationship})")
+                                                }
+                                            },
+                                            onClick = {
+                                                additionalParticipantsInput = additionalParticipantsInput.toMutableList().apply {
+                                                    set(index, profile.name)
+                                                }
+                                                isExpanded = false
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Button to add another participant
+            item {
+                OutlinedButton(
+                    onClick = {
+                        additionalParticipantsInput = additionalParticipantsInput + "Собеседник ${additionalParticipantsInput.size + 3}"
+                    },
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth().testTag("add_participant_button")
+                ) {
+                    Icon(imageVector = Icons.Default.PersonAdd, contentDescription = "Добавить участника")
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Добавить еще участника")
+                }
+            }
+
             item {
                 Spacer(modifier = Modifier.height(16.dp))
 
@@ -357,6 +509,7 @@ fun CreateMeetingScreen(
                         viewModel.setMeetingTitle(titleInput)
                         viewModel.setParticipantA(participantAInput)
                         viewModel.setParticipantB(participantBInput)
+                        viewModel.setAdditionalParticipants(additionalParticipantsInput.filter { it.isNotBlank() })
 
                         // Start recording inside foreground service and check limit
                         if (viewModel.startRecording()) {

@@ -1,6 +1,9 @@
 package com.example.ui.screens
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.*
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.platform.testTag
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -19,6 +22,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -72,9 +77,42 @@ fun MeetingDetailScreen(
         DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT, Locale("ru")).format(Date(meeting.date))
     }
 
+    val isDark = isSystemInDarkTheme()
+
     Scaffold(
+        containerColor = Color.Transparent,
+        modifier = Modifier
+            .fillMaxSize()
+            .drawBehind {
+                val radius = size.minDimension * 0.8f
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        colors = if (isDark) {
+                            listOf(Color(0xFF5F59F7).copy(alpha = 0.12f), Color.Transparent)
+                        } else {
+                            listOf(Color(0xFF5F59F7).copy(alpha = 0.07f), Color.Transparent)
+                        },
+                        center = androidx.compose.ui.geometry.Offset(size.width * 0.95f, size.height * 0.05f),
+                        radius = radius
+                    )
+                )
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        colors = if (isDark) {
+                            listOf(Color(0xFF0EA5E9).copy(alpha = 0.12f), Color.Transparent)
+                        } else {
+                            listOf(Color(0xFF0EA5E9).copy(alpha = 0.07f), Color.Transparent)
+                        },
+                        center = androidx.compose.ui.geometry.Offset(size.width * 0.05f, size.height * 0.95f),
+                        radius = radius
+                    )
+                )
+            },
         topBar = {
             LargeTopAppBar(
+                colors = TopAppBarDefaults.largeTopAppBarColors(
+                    containerColor = Color.Transparent
+                ),
                 title = {
                     Column {
                         Text(
@@ -178,10 +216,7 @@ fun MeetingDetailScreen(
                             )
                         }
                     }
-                },
-                colors = TopAppBarDefaults.largeTopAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background
-                )
+                }
             )
         }
     ) { innerPadding ->
@@ -301,16 +336,40 @@ fun PlayerCard(
     var sliderPosition by remember(currentTimeMs) { mutableFloatStateOf(currentTimeMs.toFloat()) }
     val totalFloat = maxOf(totalDurationMs.toFloat(), 1f)
 
+    // Breathing pulse scale animation for active items
+    val infiniteTransition = rememberInfiniteTransition(label = "detail_playback_pulse")
+    val pulseScale by if (isPlaying) {
+        infiniteTransition.animateFloat(
+            initialValue = 1f,
+            targetValue = 1.15f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(1250, easing = LinearEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "scale"
+        )
+    } else {
+        remember { mutableStateOf(1f) }
+    }
+
     Card(
-        shape = RoundedCornerShape(24.dp),
+        shape = RoundedCornerShape(20.dp),
         border = BorderStroke(
             width = 1.dp,
-            color = if (isDark) Color(0xFF2D323E) else Color(0xFFDDE2EA)
+            color = if (isPlaying) {
+                MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+            } else if (isDark) {
+                Color(0xFF2D323E)
+            } else {
+                Color(0xFFDDE2EA)
+            }
         ),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = if (isPlaying) 6.dp else 2.dp
+        ),
         modifier = modifier.fillMaxWidth()
     ) {
         Column(modifier = Modifier.padding(18.dp)) {
@@ -325,7 +384,9 @@ fun PlayerCard(
                     ),
                     modifier = Modifier
                         .size(52.dp)
+                        .scale(pulseScale)
                         .clip(RoundedCornerShape(14.dp))
+                        .testTag("detail_play_toggle")
                 ) {
                     Icon(
                         imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
@@ -363,7 +424,9 @@ fun PlayerCard(
                     activeTrackColor = MaterialTheme.colorScheme.primary,
                     inactiveTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
                 ),
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("detail_audio_slider")
             )
 
             Row(
@@ -695,21 +758,18 @@ fun TasksTab(
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         // Assignee Badge
-                                        val isParticipantA = task.assignedTo.lowercase() == meeting.participantA.lowercase()
+                                        val (badgeBg, badgeText) = getSpeakerColors(task.assignedTo, meeting.participantA)
                                         Box(
                                             modifier = Modifier
                                                 .clip(RoundedCornerShape(6.dp))
-                                                .background(
-                                                    if (isParticipantA) MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
-                                                    else MaterialTheme.colorScheme.secondary.copy(alpha = 0.08f)
-                                                )
+                                                .background(badgeBg)
                                                 .padding(horizontal = 8.dp, vertical = 2.dp)
                                         ) {
                                             Text(
                                                 text = "Кому: ${task.assignedTo}",
                                                 style = MaterialTheme.typography.labelSmall,
                                                 fontWeight = FontWeight.Bold,
-                                                color = if (isParticipantA) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary
+                                                color = badgeText
                                             )
                                         }
 
@@ -900,6 +960,7 @@ fun TranscriptTab(
                     val item = pair.second
                     val isParticipantA = item.speaker.lowercase() == meeting.participantA.lowercase()
                     val isActivePlayCell = originalIndex == currentActiveIndex
+                    val (speakerBg, speakerColor) = getSpeakerColors(item.speaker, meeting.participantA)
 
                     val formatTime = remember(item.timestampMs) {
                         val totalSecs = item.timestampMs / 1000
@@ -913,8 +974,7 @@ fun TranscriptTab(
                         targetValue = if (isActivePlayCell) {
                             MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
                         } else {
-                            if (isParticipantA) MaterialTheme.colorScheme.primary.copy(alpha = 0.04f)
-                            else MaterialTheme.colorScheme.secondary.copy(alpha = 0.04f)
+                            speakerBg
                         },
                         label = "cellBgColor"
                     )
@@ -923,8 +983,7 @@ fun TranscriptTab(
                         targetValue = if (isActivePlayCell) {
                             MaterialTheme.colorScheme.primary
                         } else {
-                            if (isParticipantA) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
-                            else MaterialTheme.colorScheme.secondary.copy(alpha = 0.1f)
+                            speakerColor.copy(alpha = 0.25f)
                         },
                         label = "cellBorderColor"
                     )
@@ -937,7 +996,7 @@ fun TranscriptTab(
                         verticalAlignment = Alignment.Top
                     ) {
                         if (isParticipantA) {
-                            AvatarCircle(name = item.speaker, isParticipantA = true)
+                            AvatarCircle(name = item.speaker, speakerBgColor = speakerBg, speakerTextColor = speakerColor)
                             Spacer(modifier = Modifier.width(8.dp))
                         }
 
@@ -988,7 +1047,7 @@ fun TranscriptTab(
                                         text = item.speaker,
                                         style = MaterialTheme.typography.labelLarge,
                                         fontWeight = FontWeight.ExtraBold,
-                                        color = if (isParticipantA) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary
+                                        color = speakerColor
                                     )
                                 }
                                 Row(
@@ -1031,7 +1090,7 @@ fun TranscriptTab(
 
                         if (!isParticipantA) {
                             Spacer(modifier = Modifier.width(8.dp))
-                            AvatarCircle(name = item.speaker, isParticipantA = false)
+                            AvatarCircle(name = item.speaker, speakerBgColor = speakerBg, speakerTextColor = speakerColor)
                         }
                     }
                 }
@@ -1041,7 +1100,26 @@ fun TranscriptTab(
 }
 
 @Composable
-fun AvatarCircle(name: String, isParticipantA: Boolean) {
+fun getSpeakerColors(speakerName: String, primarySpeakerName: String): Pair<androidx.compose.ui.graphics.Color, androidx.compose.ui.graphics.Color> {
+    if (speakerName.lowercase() == primarySpeakerName.lowercase()) {
+        return MaterialTheme.colorScheme.primary.copy(alpha = 0.04f) to MaterialTheme.colorScheme.primary
+    }
+    val hash = speakerName.hashCode().let { if (it < 0) -it else it }
+    val colors = listOf(
+        MaterialTheme.colorScheme.secondary,
+        androidx.compose.ui.graphics.Color(0xFF3F51B5), // Indigo
+        androidx.compose.ui.graphics.Color(0xFF009688), // Teal
+        androidx.compose.ui.graphics.Color(0xFFE91E63), // Pink
+        androidx.compose.ui.graphics.Color(0xFF7B1FA2), // Purple
+        androidx.compose.ui.graphics.Color(0xFFD84315), // Deep Orange
+        androidx.compose.ui.graphics.Color(0xFF2E7D32)  // Dark Green
+    )
+    val baseColor = colors[hash % colors.size]
+    return baseColor.copy(alpha = 0.04f) to baseColor
+}
+
+@Composable
+fun AvatarCircle(name: String, speakerBgColor: androidx.compose.ui.graphics.Color, speakerTextColor: androidx.compose.ui.graphics.Color) {
     val initial = remember(name) {
         if (name.isNotBlank()) name.first().uppercase() else "У"
     }
@@ -1050,17 +1128,14 @@ fun AvatarCircle(name: String, isParticipantA: Boolean) {
         modifier = Modifier
             .size(36.dp)
             .clip(CircleShape)
-            .background(
-                if (isParticipantA) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
-                else MaterialTheme.colorScheme.secondary.copy(alpha = 0.15f)
-            ),
+            .background(speakerBgColor.copy(alpha = 0.2f)),
         contentAlignment = Alignment.Center
     ) {
         Text(
             text = initial,
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.Bold,
-            color = if (isParticipantA) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary
+            color = speakerTextColor
         )
     }
 }

@@ -60,10 +60,28 @@ class MeetingProcessingService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == "ACTION_START_PROCESSING") {
+            // Start foreground IMMEDIATELY with a placeholder notification so Android doesn't crash us!
+            val placeholderNotification = buildProcessingNotification("Запись встречи", "Подготовка к анализу...", 0f)
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    startForeground(NOTIFICATION_ID, placeholderNotification, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+                } else {
+                    startForeground(NOTIFICATION_ID, placeholderNotification)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to start foreground processing service", e)
+            }
+
             val meetingId = intent.getLongExtra("EXTRA_MEETING_ID", -1L)
             if (meetingId != -1L) {
                 processMeetingInBackground(meetingId)
             } else {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                    stopForeground(STOP_FOREGROUND_REMOVE)
+                } else {
+                    @Suppress("DEPRECATION")
+                    stopForeground(true)
+                }
                 stopSelf()
             }
         }
@@ -79,17 +97,21 @@ class MeetingProcessingService : Service() {
             val meeting = repository.getMeetingById(meetingId)
             if (meeting == null) {
                 Log.e(TAG, "Meeting with ID $meetingId not found, aborting")
+                withContext(Dispatchers.Main) {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                        stopForeground(STOP_FOREGROUND_REMOVE)
+                    } else {
+                        @Suppress("DEPRECATION")
+                        stopForeground(true)
+                    }
+                    stopSelf()
+                }
                 return@launch
             }
 
-            // Start foreground state
+            // Update Notification with the actual title
             withContext(Dispatchers.Main) {
-                val notification = buildProcessingNotification(meeting.title, "Подготовка к анализу...", 0f)
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    startForeground(NOTIFICATION_ID, notification, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
-                } else {
-                    startForeground(NOTIFICATION_ID, notification)
-                }
+                updateNotification(meeting.title, "Подготовка к обработке...", 0f)
             }
 
             try {
@@ -114,10 +136,11 @@ class MeetingProcessingService : Service() {
 
                 val profiles = database.voiceProfileDao().getVoiceProfilesList()
                 val analysisResult = transcriptionService.analyzeMeeting(
-                    audioFile,
-                    meeting.participantA,
-                    meeting.participantB,
-                    profiles
+                    audioFile = audioFile,
+                    participantA = meeting.participantA,
+                    participantB = meeting.participantB,
+                    additionalParticipants = meeting.additionalParticipants,
+                    voiceProfiles = profiles
                 )
 
                 // Phase 4: Summarization & Tasks Extraction (75% - 100%)

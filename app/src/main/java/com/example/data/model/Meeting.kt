@@ -33,6 +33,7 @@ data class Meeting(
     val status: MeetingStatus = MeetingStatus.COMPLETED,
     val participantA: String = "Участник 1",
     val participantB: String = "Участник 2",
+    val additionalParticipants: List<String> = emptyList(),
     val isFavorite: Boolean = false,
     val tags: List<String> = emptyList()
 )
