@@ -3,11 +3,26 @@ package com.example
 import android.os.Bundle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.runtime.remember
+import androidx.compose.animation.*
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Error
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.delay
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
@@ -62,6 +77,17 @@ class MainActivity : FragmentActivity() {
                     val viewModel: MeetingViewModel = viewModel()
                     val sessionManager = remember { SessionManager(applicationContext) }
 
+                    val toastState by viewModel.toast.collectAsState()
+                    val activeThemeName by viewModel.activeThemeColor.collectAsState()
+                    val themeColors = remember(activeThemeName) { com.example.ui.theme.ThemeColorsProvider.getColors(activeThemeName) }
+
+                    LaunchedEffect(toastState) {
+                        if (toastState != null) {
+                            delay(3000L)
+                            viewModel.clearToast()
+                        }
+                    }
+
                     // Dynamically calculate our starting destination based on authentication/onboarding state
                     val startDest = remember {
                         if (!sessionManager.isOnboardingCompleted) {
@@ -75,10 +101,11 @@ class MainActivity : FragmentActivity() {
                         }
                     }
 
-                    NavHost(
-                        navController = navController,
-                        startDestination = startDest
-                    ) {
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        NavHost(
+                            navController = navController,
+                            startDestination = startDest
+                        ) {
                         composable("onboarding") {
                             OnboardingScreen(
                                 onFinish = {
@@ -127,7 +154,11 @@ class MainActivity : FragmentActivity() {
                                     navController.navigate("processing/$id")
                                 },
                                 onNavigateToVoiceProfiles = {
-                                    navController.navigate("voice_profiles")
+                                    navController.navigate("voice_profiles") {
+                                        popUpTo("list") { saveState = true }
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
                                 },
                                 onNavigateToCreateMeeting = {
                                     navController.navigate("create_meeting")
@@ -145,7 +176,11 @@ class MainActivity : FragmentActivity() {
                                     navController.navigate("subscription")
                                 },
                                 onNavigateToSettings = {
-                                    navController.navigate("settings")
+                                    navController.navigate("settings") {
+                                        popUpTo("list") { saveState = true }
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
                                 }
                             )
                         }
@@ -172,6 +207,9 @@ class MainActivity : FragmentActivity() {
                                 viewModel = viewModel,
                                 onNavigateBack = {
                                     navController.popBackStack()
+                                },
+                                onNavigateToVoiceProfiles = {
+                                    navController.navigate("voice_profiles")
                                 },
                                 onStopAndStartProcessing = { meetingId ->
                                     navController.navigate("processing/$meetingId") {
@@ -207,6 +245,23 @@ class MainActivity : FragmentActivity() {
                                 viewModel = viewModel,
                                 onNavigateBack = {
                                     navController.popBackStack()
+                                },
+                                onNavigateToRecording = {
+                                    navController.navigate("recording")
+                                },
+                                onNavigateToMeetingList = {
+                                    navController.navigate("list") {
+                                        popUpTo("list") { saveState = true }
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
+                                },
+                                onNavigateToSettings = {
+                                    navController.navigate("settings") {
+                                        popUpTo("list") { saveState = true }
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
                                 },
                                 onNavigateToSubscription = {
                                     navController.navigate("subscription")
@@ -245,11 +300,25 @@ class MainActivity : FragmentActivity() {
                                 onNavigateBack = {
                                     navController.popBackStack()
                                 },
+                                onNavigateToMeetingList = {
+                                    navController.navigate("list") {
+                                        popUpTo("list") { saveState = true }
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
+                                },
+                                onNavigateToVoiceProfiles = {
+                                    navController.navigate("voice_profiles") {
+                                        popUpTo("list") { saveState = true }
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
+                                },
                                 onNavigateToSubscription = {
                                     navController.navigate("subscription")
                                 },
-                                onNavigateToVoiceProfiles = {
-                                    navController.navigate("voice_profiles")
+                                onNavigateToCreateMeeting = {
+                                    navController.navigate("create_meeting")
                                 },
                                 onAccountDeleted = {
                                     navController.navigate("onboarding") {
@@ -259,8 +328,72 @@ class MainActivity : FragmentActivity() {
                             )
                         }
                     }
+
+                    // Beautiful Unified Custom Toast overlay that floats on top of all screens
+                    AnimatedVisibility(
+                        visible = toastState != null,
+                        enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
+                        exit = slideOutVertically(targetOffsetY = { -it }) + fadeOut(),
+                        modifier = Modifier
+                            .align(Alignment.TopCenter)
+                            .statusBarsPadding()
+                            .padding(top = 16.dp)
+                            .testTag("custom_toast_container")
+                    ) {
+                        toastState?.let { activeToast ->
+                            Card(
+                                shape = RoundedCornerShape(24.dp),
+                                border = BorderStroke(
+                                    1.dp, 
+                                    if (activeToast.isSuccess) themeColors.primary.copy(alpha = 0.3f) 
+                                    else MaterialTheme.colorScheme.error.copy(alpha = 0.3f)
+                                ),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = Color.White
+                                ),
+                                elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
+                                modifier = Modifier
+                                    .padding(horizontal = 24.dp)
+                                    .widthIn(max = 500.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(vertical = 12.dp, horizontal = 18.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(32.dp)
+                                            .clip(CircleShape)
+                                            .background(
+                                                if (activeToast.isSuccess) themeColors.primary.copy(alpha = 0.12f) 
+                                                else MaterialTheme.colorScheme.errorContainer
+                                            ),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = if (activeToast.isSuccess) Icons.Default.CheckCircle else Icons.Default.Error,
+                                            contentDescription = null,
+                                            tint = if (activeToast.isSuccess) themeColors.primary else MaterialTheme.colorScheme.error,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                    Text(
+                                        text = activeToast.text,
+                                        style = MaterialTheme.typography.bodyMedium.copy(
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color(0xFF1E293B),
+                                            fontSize = 14.sp
+                                        ),
+                                        modifier = Modifier.weight(1f, fill = false)
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
     }
+}
 }

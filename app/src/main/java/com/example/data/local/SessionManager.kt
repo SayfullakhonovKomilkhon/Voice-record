@@ -18,6 +18,10 @@ class SessionManager(context: Context) {
         get() = prefs.getString("logged_in_email", null)
         set(value) = prefs.edit().putString("logged_in_email", value).apply()
 
+    var loggedInName: String?
+        get() = prefs.getString("logged_in_name", null)
+        set(value) = prefs.edit().putString("logged_in_name", value).apply()
+
     var isBiometricEnabled: Boolean
         get() = prefs.getBoolean("biometric_enabled", false)
         set(value) = prefs.edit().putBoolean("biometric_enabled", value).apply()
@@ -26,10 +30,19 @@ class SessionManager(context: Context) {
         get() = prefs.getBoolean("is_pro_active", false)
         set(value) = prefs.edit().putBoolean("is_pro_active", value).apply()
 
+    var summaryDetailLevel: String
+        get() = prefs.getString("summary_detail_level", "detailed") ?: "detailed"
+        set(value) = prefs.edit().putString("summary_detail_level", value).apply()
+
+    var activeThemeColor: String
+        get() = prefs.getString("active_theme_color", "teal") ?: "teal"
+        set(value) = prefs.edit().putString("active_theme_color", value).apply()
+
     fun clearSession() {
         prefs.edit()
             .putBoolean("is_logged_in", false)
             .putString("logged_in_email", null)
+            .putString("logged_in_name", null)
             .putBoolean("biometric_enabled", false)
             .apply()
     }

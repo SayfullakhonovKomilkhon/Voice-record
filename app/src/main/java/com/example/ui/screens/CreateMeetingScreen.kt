@@ -33,6 +33,10 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.example.data.model.VoiceProfile
 import com.example.ui.viewmodel.MeetingViewModel
+import com.example.ui.theme.CorporatePrimaryDark
+import com.example.ui.theme.CorporatePrimaryLight
+import com.example.ui.theme.CorporateSecondaryDark
+import com.example.ui.theme.CorporateSecondaryLight
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -43,16 +47,28 @@ fun CreateMeetingScreen(
     onNavigateToSubscription: () -> Unit
 ) {
     val profiles by viewModel.allVoiceProfiles.collectAsState()
-    val isDark = isSystemInDarkTheme()
+    val isDark = false
     val context = LocalContext.current
 
     var titleInput by remember { mutableStateOf("") }
-    var participantAInput by remember { mutableStateOf("Иван") }
-    var participantBInput by remember { mutableStateOf("Сергей") }
+    var participantAInput by remember { mutableStateOf("") }
+    var participantBInput by remember { mutableStateOf("") }
     var additionalParticipantsInput by remember { mutableStateOf(listOf<String>()) }
 
     var expandedA by remember { mutableStateOf(false) }
     var expandedB by remember { mutableStateOf(false) }
+
+    // Dynamically auto-fill with first and second available voice profiles if any
+    LaunchedEffect(profiles) {
+        if (profiles.isNotEmpty()) {
+            if (participantAInput.isBlank()) {
+                participantAInput = profiles.getOrNull(0)?.name ?: ""
+            }
+            if (participantBInput.isBlank()) {
+                participantBInput = profiles.getOrNull(1)?.name ?: ""
+            }
+        }
+    }
 
     var showWarningConsentDialog by remember { mutableStateOf(false) }
     var showLimitExceededDialog by remember { mutableStateOf(false) }
@@ -73,13 +89,15 @@ fun CreateMeetingScreen(
         modifier = Modifier
             .fillMaxSize()
             .drawBehind {
+                val primaryColor = if (isDark) CorporatePrimaryDark else CorporatePrimaryLight
+                val secondaryColor = if (isDark) CorporateSecondaryDark else CorporateSecondaryLight
                 val radius = size.minDimension * 0.8f
                 drawCircle(
                     brush = Brush.radialGradient(
                         colors = if (isDark) {
-                            listOf(Color(0xFF5F59F7).copy(alpha = 0.12f), Color.Transparent)
+                            listOf(primaryColor.copy(alpha = 0.12f), Color.Transparent)
                         } else {
-                            listOf(Color(0xFF5F59F7).copy(alpha = 0.07f), Color.Transparent)
+                            listOf(primaryColor.copy(alpha = 0.07f), Color.Transparent)
                         },
                         center = androidx.compose.ui.geometry.Offset(size.width * 0.95f, size.height * 0.05f),
                         radius = radius
@@ -88,9 +106,9 @@ fun CreateMeetingScreen(
                 drawCircle(
                     brush = Brush.radialGradient(
                         colors = if (isDark) {
-                            listOf(Color(0xFF0EA5E9).copy(alpha = 0.12f), Color.Transparent)
+                            listOf(secondaryColor.copy(alpha = 0.12f), Color.Transparent)
                         } else {
-                            listOf(Color(0xFF0EA5E9).copy(alpha = 0.07f), Color.Transparent)
+                            listOf(secondaryColor.copy(alpha = 0.07f), Color.Transparent)
                         },
                         center = androidx.compose.ui.geometry.Offset(size.width * 0.05f, size.height * 0.95f),
                         radius = radius

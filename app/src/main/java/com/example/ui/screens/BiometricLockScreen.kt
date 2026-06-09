@@ -33,7 +33,7 @@ fun BiometricLockScreen(
     onResetAuth: () -> Unit
 ) {
     val context = LocalContext.current
-    val isDark = isSystemInDarkTheme()
+    val isDark = false
     
     val accentColor = if (isDark) Color(0xFFADC6FF) else Color(0xFF005FAC)
     
@@ -61,6 +61,7 @@ fun BiometricLockScreen(
 
     // Trigger auto prompt on screen entrance
     LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(300)
         triggerBiometricVerification()
     }
 

@@ -38,7 +38,7 @@ fun ProcessingScreen(
     val activeStates by viewModel.activeProcessingStates.collectAsState()
 
     val currentMeeting = remember(meetings) { meetings.find { it.id == meetingId } }
-    val isDark = isSystemInDarkTheme()
+    val isDark = false
 
     // Retrieve active background service progress state
     val state = activeStates[meetingId]

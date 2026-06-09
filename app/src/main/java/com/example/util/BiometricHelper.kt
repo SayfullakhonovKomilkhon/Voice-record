@@ -27,7 +27,7 @@ object BiometricHelper {
             val biometricManager = BiometricManager.from(context)
             val authenticators = BiometricManager.Authenticators.BIOMETRIC_STRONG or BiometricManager.Authenticators.DEVICE_CREDENTIAL
             biometricManager.canAuthenticate(authenticators) == BiometricManager.BIOMETRIC_SUCCESS
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             Log.e("BiometricHelper", "Failed to check biometric availability", e)
             false
         }
@@ -74,7 +74,7 @@ object BiometricHelper {
                 .build()
 
             biometricPrompt.authenticate(promptInfo)
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             Log.e("BiometricHelper", "Error instantiating or executing biometric prompt", e)
             onError("Биометрия не поддерживается: ${e.localizedMessage ?: "ошибка запуска"}")
         }
