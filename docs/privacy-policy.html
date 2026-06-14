@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Политика конфиденциальности — WoxAI</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f5f5f5;
+      color: #1a1a1a;
+      line-height: 1.7;
+    }
+    header {
+      background: linear-gradient(135deg, #6c63ff, #48cfad);
+      color: white;
+      padding: 48px 24px 40px;
+      text-align: center;
+    }
+    header h1 { font-size: 2rem; font-weight: 700; margin-bottom: 8px; }
+    header p { font-size: 0.95rem; opacity: 0.85; }
+    .container {
+      max-width: 780px;
+      margin: 0 auto;
+      padding: 40px 24px 80px;
+    }
+    .card {
+      background: white;
+      border-radius: 16px;
+      padding: 32px;
+      margin-bottom: 24px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.07);
+    }
+    h2 {
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: #6c63ff;
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    h2::before {
+      content: '';
+      display: inline-block;
+      width: 4px;
+      height: 20px;
+      background: linear-gradient(#6c63ff, #48cfad);
+      border-radius: 2px;
+    }
+    p { margin-bottom: 10px; font-size: 0.95rem; color: #444; }
+    ul { padding-left: 20px; margin-bottom: 10px; }
+    ul li { font-size: 0.95rem; color: #444; margin-bottom: 6px; }
+    .highlight {
+      background: #f0eeff;
+      border-left: 3px solid #6c63ff;
+      padding: 12px 16px;
+      border-radius: 0 8px 8px 0;
+      margin: 12px 0;
+      font-size: 0.9rem;
+      color: #555;
+    }
+    .updated {
+      text-align: center;
+      font-size: 0.85rem;
+      color: #999;
+      margin-top: 40px;
+    }
+    a { color: #6c63ff; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>🔒 Политика конфиденциальности</h1>
+  <p>WoxAI — AI Voice Recorder &amp; Meeting Assistant</p>
+</header>
+
+<div class="container">
+
+  <div class="card">
+    <h2>Общие сведения</h2>
+    <p>
+      Настоящая Политика конфиденциальности описывает, как приложение <strong>WoxAI</strong>
+      (разработчик: AI Studio) собирает, использует и защищает ваши данные при использовании
+      нашего приложения для Android.
+    </p>
+    <p>
+      Используя приложение, вы соглашаетесь с условиями данной политики.
+    </p>
+  </div>
+
+  <div class="card">
+    <h2>Какие данные мы собираем</h2>
+    <ul>
+      <li><strong>Аудиозаписи:</strong> голосовые записи, которые вы создаёте в приложении, хранятся локально на вашем устройстве.</li>
+      <li><strong>Транскрипции:</strong> текстовые расшифровки ваших записей, создаваемые с помощью AI.</li>
+      <li><strong>Данные аккаунта:</strong> email и имя пользователя при авторизации через Google (Firebase Authentication).</li>
+      <li><strong>Профили голоса:</strong> пользовательские метки для идентификации участников встреч.</li>
+      <li><strong>Данные об использовании:</strong> анонимная статистика для улучшения качества сервиса.</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h2>Как мы используем данные</h2>
+    <ul>
+      <li>Для предоставления основных функций приложения: записи, транскрипции и анализа встреч.</li>
+      <li>Для синхронизации данных между устройствами (при наличии аккаунта).</li>
+      <li>Для улучшения точности AI-расшифровки с использованием Google Gemini API.</li>
+      <li>Для отправки push-уведомлений (Firebase Cloud Messaging).</li>
+    </ul>
+    <div class="highlight">
+      Мы <strong>не продаём</strong> и <strong>не передаём</strong> ваши личные данные третьим лицам в коммерческих целях.
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Сторонние сервисы</h2>
+    <p>Приложение использует следующие сторонние сервисы со своими политиками конфиденциальности:</p>
+    <ul>
+      <li><a href="https://firebase.google.com/support/privacy" target="_blank">Google Firebase</a> — аутентификация, база данных, уведомления.</li>
+      <li><a href="https://ai.google.dev/gemini-api/terms" target="_blank">Google Gemini API</a> — AI-транскрипция и анализ текста.</li>
+      <li><a href="https://policies.google.com/privacy" target="_blank">Google Play Billing</a> — обработка платежей и подписок.</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h2>Разрешения приложения</h2>
+    <ul>
+      <li><strong>RECORD_AUDIO</strong> — для записи голоса и проведения встреч.</li>
+      <li><strong>INTERNET</strong> — для синхронизации данных и работы AI-функций.</li>
+      <li><strong>USE_BIOMETRIC / USE_FINGERPRINT</strong> — для защиты приложения биометрией (опционально).</li>
+      <li><strong>FOREGROUND_SERVICE</strong> — для фоновой записи во время встреч.</li>
+      <li><strong>POST_NOTIFICATIONS</strong> — для уведомлений о статусе записи.</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h2>Хранение и безопасность данных</h2>
+    <p>
+      Аудиофайлы хранятся на вашем устройстве и, при необходимости, в защищённом облачном
+      хранилище Firebase Storage. Передача данных осуществляется по зашифрованному протоколу HTTPS.
+    </p>
+    <p>
+      Мы принимаем разумные меры для защиты ваших данных, однако ни один метод передачи данных
+      через интернет не является абсолютно безопасным.
+    </p>
+  </div>
+
+  <div class="card">
+    <h2>Ваши права</h2>
+    <ul>
+      <li>Удалить свой аккаунт и все связанные данные в любое время через настройки приложения.</li>
+      <li>Отозвать разрешения приложения через настройки Android.</li>
+      <li>Запросить копию или удаление ваших данных, написав нам на email.</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h2>Дети</h2>
+    <p>
+      Наше приложение не предназначено для детей до 13 лет. Мы намеренно не собираем
+      личные данные лиц младше 13 лет.
+    </p>
+  </div>
+
+  <div class="card">
+    <h2>Контакты</h2>
+    <p>
+      Если у вас есть вопросы или запросы по данной политике конфиденциальности, свяжитесь с нами:
+    </p>
+    <p>📧 <strong>Email:</strong> <a href="mailto:support@woxai.app">support@woxai.app</a></p>
+  </div>
+
+  <p class="updated">Последнее обновление: 15 июня 2026 г.</p>
+
+</div>
+
+</body>
+</html>
